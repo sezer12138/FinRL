@@ -97,6 +97,7 @@ class DRLAgent:
             policy_kwargs=policy_kwargs,
             seed=seed,
             **model_kwargs,
+            device="gpu"
         )
 
     def train_model(self, model, tb_log_name, total_timesteps=5000):
@@ -140,26 +141,25 @@ class DRLAgent:
         except BaseException:
             raise ValueError("Fail to load agent!")
 
-        # test on the testing env
-        state = environment.reset()
-        episode_returns = []  # the cumulative_return / initial_account
-        episode_total_assets = [environment.initial_total_asset]
-        done = False
-        while not done:
-            action = model.predict(state, deterministic=deterministic)[0]
-            state, reward, done, _ = environment.step(action)
-
-            total_asset = (
-                environment.amount
-                + (environment.price_ary[environment.day] * environment.stocks).sum()
-            )
-            episode_total_assets.append(total_asset)
-            episode_return = total_asset / environment.initial_total_asset
-            episode_returns.append(episode_return)
-
-        print("episode_return", episode_return)
-        print("Test Finished!")
-        return episode_total_assets
+        test_env, test_obs = environment.get_sb_env()
+        """make a prediction"""
+        account_memory = []
+        actions_memory = []
+        #         state_memory=[] #add memory pool to store states
+        test_env.reset()
+        for i in range(len(environment.df.index.unique())):
+            action, _states = model.predict(test_obs, deterministic=deterministic)
+            # account_memory = test_env.env_method(method_name="save_asset_memory")
+            # actions_memory = test_env.env_method(method_name="save_action_memory")
+            test_obs, rewards, dones, info = test_env.step(action)
+            if i == (len(environment.df.index.unique()) - 2):
+                account_memory = test_env.env_method(method_name="save_asset_memory")
+                actions_memory = test_env.env_method(method_name="save_action_memory")
+            #                 state_memory=test_env.env_method(method_name="save_state_memory") # add current state to state memory
+            if dones[0]:
+                print("hit end!")
+                break
+        return account_memory[0], actions_memory[0]
 
 
 class DRLEnsembleAgent:
